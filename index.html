@@ -134,7 +134,6 @@
         </div>
 
         <div class="controls-container">
-            <!-- Hanya H1 & H4 untuk memastikan kestabilan data valid -->
             <div class="control-row">
                 <button class="btn active" onclick="changeTimeframe('1h', this)">H1</button>
                 <button class="btn" onclick="changeTimeframe('4h', this)">H4</button>
@@ -169,12 +168,11 @@
 
         window.addEventListener("resize", resizeCanvas);
 
-        // Ambil Data Pasar Riil dari Twelve Data
+        // Ambil Data Pasar
         async function fetchData() {
             document.getElementById("api-status").innerText = "Mengunduh...";
             document.getElementById("api-status").className = "status-badge warning";
             
-            // PERBAIKAN UTAMA: Mengirimkan simbol apa adanya menggunakan encodeURIComponent agar tanda "/" tetap utuh
             const encodedSymbol = encodeURIComponent(currentSymbol);
             const url = `https://api.twelvedata.com/time_series?symbol=${encodedSymbol}&interval=${currentInterval}&apikey=${API_KEY}&outputsize=100`;
 
@@ -188,8 +186,7 @@
                     document.getElementById("api-status").innerText = "LIVE DATA (VALID)";
                     document.getElementById("api-status").className = "status-badge";
                 } else {
-                    // Jika terjadi kegagalan/limit harian terlewati, infokan status simulasi
-                    console.warn("API ditolak. Mengaktifkan visualisasi simulasi.");
+                    console.warn("API terhambat. Mengaktifkan visualisasi simulasi.");
                     useMockData();
                 }
             } catch (error) {
@@ -201,7 +198,7 @@
             drawChart();
         }
 
-        // Generator simulasi cadangan jika koneksi gagal atau limit Twelve Data habis
+        // Generator simulasi cadangan
         function useMockData() {
             isUsingMock = true;
             document.getElementById("api-status").innerText = "DATA SIMULASI (LIMIT/OFFLINE)";
@@ -258,7 +255,7 @@
             return ema;
         }
 
-        // Proses Seluruh Indikator
+        // Proses Indikator
         function processTechnicalIndicators() {
             const length = rawData.length;
             if (length === 0) return;
@@ -267,7 +264,7 @@
             const lows = rawData.map(d => parseFloat(d.low));
             const closes = rawData.map(d => parseFloat(d.close));
 
-            // Indikator Symmetrical MA Ribbon
+            // Symmetrical MA Ribbon
             const fastMA = calculateEMA(closes, 10);
             const slowMA = calculateEMA(closes, 30);
             const mirrorMA = [];
@@ -280,7 +277,7 @@
                 }
             }
 
-            // Indikator EMA Subwindow 2-50
+            // EMA Subwindow 2-50
             const stochRaw = [];
             const stochPeriod = 14;
 
@@ -318,7 +315,7 @@
             return new Date(dateStr.replace(' ', 'T'));
         }
 
-        // Visualisasi Canvas utama
+        // Gambar Grafik Utama
         function drawChart() {
             const width = canvas.width / window.devicePixelRatio;
             const height = canvas.height / window.devicePixelRatio;
@@ -396,7 +393,7 @@
             }
             ctx.setLineDash([]);
 
-            // ---- DRAW PERIOD SEPARATOR ----
+            // ---- DRAW PERIOD SEPARATOR (Garis Tepat Pada Lilin 00:00 / Open Day) ----
             const today = new Date();
             const daysIndo = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
@@ -405,22 +402,24 @@
                 const dateCurrent = parseBarDate(rawData[i].datetime);
                 const datePrev = parseBarDate(rawData[i - 1].datetime);
 
-                // Garis pembatas digambar setiap kali ada perubahan tanggal
+                // Mendeteksi lilin pertama di hari baru (lilin pembuka pukul 00:00 server)
                 const isNewPeriod = (dateCurrent.getDate() !== datePrev.getDate()) || 
                                     (dateCurrent.getMonth() !== datePrev.getMonth()) || 
                                     (dateCurrent.getFullYear() !== datePrev.getFullYear());
 
                 if (isNewPeriod) {
-                    const xLine = localIdx * barSpacing;
+                    // PERBAIKAN: Menambahkan barSpacing/2 agar garis vertikal ditarik tepat di tengah lilin 00:00
+                    const xLine = localIdx * barSpacing + barSpacing / 2;
+                    
                     const isToday = dateCurrent.getDate() === today.getDate() &&
                                     dateCurrent.getMonth() === today.getMonth() &&
                                     dateCurrent.getFullYear() === today.getFullYear();
 
                     if (isToday) {
-                        ctx.strokeStyle = "rgba(255, 215, 0, 0.5)"; // Garis emas untuk Hari Ini
+                        ctx.strokeStyle = "rgba(255, 215, 0, 0.65)"; // Garis emas stabil untuk lilin Hari Ini
                         ctx.lineWidth = 1.5;
                     } else {
-                        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)"; // Garis putih transparan
+                        ctx.strokeStyle = "rgba(255, 255, 255, 0.22)"; // Garis abu transparan
                         ctx.lineWidth = 1;
                     }
 
@@ -456,7 +455,7 @@
                 ctx.fillRect(xStart + 1, yLow, barSpacing - 1, mainBottomY - yLow);
             }
 
-            // ---- INDIKATOR 2 (Symmetrical MA Ribbon - Pita Pengikut Tren) ----
+            // ---- INDIKATOR 2 (Symmetrical MA Ribbon) ----
             for (let i = startIndex; i <= endIndex; i++) {
                 const localIdx = i - startIndex;
                 const x = localIdx * barSpacing + barSpacing / 2;
