@@ -47,6 +47,9 @@
             color: #fff;
         }
         .status-badge.warning {
+            background-color: #b71c1c;
+        }
+        .status-badge.simulated {
             background-color: #e65100;
         }
         .chart-wrapper {
@@ -131,11 +134,10 @@
         </div>
 
         <div class="controls-container">
+            <!-- Hanya H1 & H4 untuk memastikan kestabilan data valid -->
             <div class="control-row">
                 <button class="btn active" onclick="changeTimeframe('1h', this)">H1</button>
                 <button class="btn" onclick="changeTimeframe('4h', this)">H4</button>
-                <button class="btn" onclick="changeTimeframe('1day', this)">D1</button>
-                <button class="btn" onclick="changeTimeframe('30min', this)">M30</button>
                 <button class="btn btn-refresh" onclick="refreshData()">REFRES API</button>
             </div>
             <div class="control-row">
@@ -147,15 +149,13 @@
     </div>
 
     <script>
-        // Konfigurasi API Utama (Telah Diperbarui ke Key Terbaru)
         const API_KEY = "8cd5e84fa4564322b907aaddac29b059";
         let currentSymbol = "GBP/USD";
-        let currentInterval = "1h";
+        let currentInterval = "1h"; // Default H1
         let rawData = [];
         let calculatedData = {};
         let isUsingMock = false;
 
-        // Setup Canvas
         const canvas = document.getElementById("chartCanvas");
         const ctx = canvas.getContext("2d");
 
@@ -169,13 +169,14 @@
 
         window.addEventListener("resize", resizeCanvas);
 
-        // Ambil Data Pasar
+        // Ambil Data Pasar Riil dari Twelve Data
         async function fetchData() {
             document.getElementById("api-status").innerText = "Mengunduh...";
             document.getElementById("api-status").className = "status-badge warning";
             
-            const querySymbol = currentSymbol.replace("/", "");
-            const url = `https://api.twelvedata.com/time_series?symbol=${querySymbol}&interval=${currentInterval}&apikey=${API_KEY}&outputsize=100`;
+            // PERBAIKAN UTAMA: Mengirimkan simbol apa adanya menggunakan encodeURIComponent agar tanda "/" tetap utuh
+            const encodedSymbol = encodeURIComponent(currentSymbol);
+            const url = `https://api.twelvedata.com/time_series?symbol=${encodedSymbol}&interval=${currentInterval}&apikey=${API_KEY}&outputsize=100`;
 
             try {
                 const response = await fetch(url);
@@ -184,14 +185,15 @@
                 if (result.status === "ok" && result.values && result.values.length > 0) {
                     rawData = result.values.reverse();
                     isUsingMock = false;
-                    document.getElementById("api-status").innerText = "API AKTIF";
+                    document.getElementById("api-status").innerText = "LIVE DATA (VALID)";
                     document.getElementById("api-status").className = "status-badge";
                 } else {
-                    console.warn("API terhambat atau habis limit. Beralih ke data simulasi.");
+                    // Jika terjadi kegagalan/limit harian terlewati, infokan status simulasi
+                    console.warn("API ditolak. Mengaktifkan visualisasi simulasi.");
                     useMockData();
                 }
             } catch (error) {
-                console.error("Terjadi galat pengambilan data:", error);
+                console.error("Terjadi galat:", error);
                 useMockData();
             }
 
@@ -199,26 +201,17 @@
             drawChart();
         }
 
-        // Penanganan simulasi data pasar jika limit API habis
+        // Generator simulasi cadangan jika koneksi gagal atau limit Twelve Data habis
         function useMockData() {
             isUsingMock = true;
-            document.getElementById("api-status").innerText = "SIMULASI DATA (API LIMIT)";
-            document.getElementById("api-status").className = "status-badge warning";
+            document.getElementById("api-status").innerText = "DATA SIMULASI (LIMIT/OFFLINE)";
+            document.getElementById("api-status").className = "status-badge simulated";
             
             let basePrice = currentSymbol === "XAU/USD" ? 2300 : (currentSymbol === "GBP/USD" ? 1.27 : 1.09);
             const mockList = [];
             let currentTime = Date.now();
             
-            let step;
-            if (currentInterval === "30min") {
-                step = 30 * 60 * 1000;
-            } else if (currentInterval === "1h") {
-                step = 60 * 60 * 1000;
-            } else if (currentInterval === "4h") {
-                step = 4 * 60 * 60 * 1000;
-            } else { // 1day
-                step = 24 * 60 * 60 * 1000;
-            }
+            let step = currentInterval === "1h" ? 60 * 60 * 1000 : 4 * 60 * 60 * 1000;
 
             for (let i = 0; i < 100; i++) {
                 let change = (Math.random() - 0.49) * (basePrice * 0.0035);
@@ -239,7 +232,7 @@
             rawData = mockList;
         }
 
-        // Perhitungan EMA
+        // Penghitungan EMA
         function calculateEMA(prices, period) {
             const ema = [];
             const k = 2 / (period + 1);
@@ -265,7 +258,7 @@
             return ema;
         }
 
-        // Proses Indikator Teknikal
+        // Proses Seluruh Indikator
         function processTechnicalIndicators() {
             const length = rawData.length;
             if (length === 0) return;
@@ -274,7 +267,7 @@
             const lows = rawData.map(d => parseFloat(d.low));
             const closes = rawData.map(d => parseFloat(d.close));
 
-            // Indikator 2 (Symmetrical MA Ribbon)
+            // Indikator Symmetrical MA Ribbon
             const fastMA = calculateEMA(closes, 10);
             const slowMA = calculateEMA(closes, 30);
             const mirrorMA = [];
@@ -287,7 +280,7 @@
                 }
             }
 
-            // Indikator 3 (EMA Subwindow 2-50)
+            // Indikator EMA Subwindow 2-50
             const stochRaw = [];
             const stochPeriod = 14;
 
@@ -321,12 +314,11 @@
             };
         }
 
-        // Pengonversi Tanggal ke Date Object
         function parseBarDate(dateStr) {
             return new Date(dateStr.replace(' ', 'T'));
         }
 
-        // Plotting/Drawing Grafik Utama
+        // Visualisasi Canvas utama
         function drawChart() {
             const width = canvas.width / window.devicePixelRatio;
             const height = canvas.height / window.devicePixelRatio;
@@ -338,7 +330,7 @@
                 ctx.fillStyle = "#ffffff";
                 ctx.font = "14px sans-serif";
                 ctx.textAlign = "center";
-                ctx.fillText("Menunggu data pasar...", width / 2, height / 2);
+                ctx.fillText("Menghubungkan data...", width / 2, height / 2);
                 return;
             }
 
@@ -404,7 +396,7 @@
             }
             ctx.setLineDash([]);
 
-            // ---- DRAW PERIOD SEPARATOR (Garis Pembatas Periode) ----
+            // ---- DRAW PERIOD SEPARATOR ----
             const today = new Date();
             const daysIndo = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
@@ -413,17 +405,10 @@
                 const dateCurrent = parseBarDate(rawData[i].datetime);
                 const datePrev = parseBarDate(rawData[i - 1].datetime);
 
-                let isNewPeriod = false;
-
-                // Batas pemisahan: bulan jika timeframe D1, hari jika intraday (H1, H4, M30)
-                if (currentInterval === "1day") {
-                    isNewPeriod = (dateCurrent.getMonth() !== datePrev.getMonth()) || 
-                                  (dateCurrent.getFullYear() !== datePrev.getFullYear());
-                } else {
-                    isNewPeriod = (dateCurrent.getDate() !== datePrev.getDate()) || 
-                                  (dateCurrent.getMonth() !== datePrev.getMonth()) || 
-                                  (dateCurrent.getFullYear() !== datePrev.getFullYear());
-                }
+                // Garis pembatas digambar setiap kali ada perubahan tanggal
+                const isNewPeriod = (dateCurrent.getDate() !== datePrev.getDate()) || 
+                                    (dateCurrent.getMonth() !== datePrev.getMonth()) || 
+                                    (dateCurrent.getFullYear() !== datePrev.getFullYear());
 
                 if (isNewPeriod) {
                     const xLine = localIdx * barSpacing;
@@ -431,12 +416,11 @@
                                     dateCurrent.getMonth() === today.getMonth() &&
                                     dateCurrent.getFullYear() === today.getFullYear();
 
-                    // Pengaturan gaya garis period separator
                     if (isToday) {
-                        ctx.strokeStyle = "rgba(255, 215, 0, 0.5)"; // Kuning/Emas untuk batas hari ini
+                        ctx.strokeStyle = "rgba(255, 215, 0, 0.5)"; // Garis emas untuk Hari Ini
                         ctx.lineWidth = 1.5;
                     } else {
-                        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)"; // Abu-abu semi-transparan untuk hari lalu
+                        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)"; // Garis putih transparan
                         ctx.lineWidth = 1;
                     }
 
@@ -447,24 +431,15 @@
                     ctx.stroke();
                     ctx.setLineDash([]);
 
-                    // Gambar Label Tanggal di bagian atas garis
                     ctx.fillStyle = isToday ? "#ffd700" : "rgba(255, 255, 255, 0.5)";
                     ctx.font = "bold 9px sans-serif";
                     ctx.textAlign = "center";
                     
-                    let labelText = "";
-                    if (currentInterval === "1day") {
-                        const monthsIndo = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-                        labelText = monthsIndo[dateCurrent.getMonth()] + " " + dateCurrent.getFullYear();
-                    } else {
-                        labelText = `${daysIndo[dateCurrent.getDay()]} ${dateCurrent.getDate()}/${dateCurrent.getMonth() + 1}`;
-                    }
+                    let labelText = `${daysIndo[dateCurrent.getDay()]} ${dateCurrent.getDate()}/${dateCurrent.getMonth() + 1}`;
                     ctx.fillText(labelText, xLine, mainTopY - 5);
 
-                    // Tambahkan teks penunjuk khusus "HARI INI" di bagian bawah garis
-                    if (isToday && currentInterval !== "1day") {
+                    if (isToday) {
                         ctx.fillStyle = "#ffd700";
-                        ctx.font = "bold 9px sans-serif";
                         ctx.fillText("HARI INI", xLine, mainBottomY - 5);
                     }
                 }
@@ -498,13 +473,13 @@
                     ctx.lineWidth = Math.max(1, barSpacing - 2);
 
                     if (fast > slow) {
-                        ctx.strokeStyle = "rgba(30, 144, 255, 0.45)"; // DodgerBlue Ribbon
+                        ctx.strokeStyle = "rgba(30, 144, 255, 0.45)";
                         ctx.beginPath();
                         ctx.moveTo(x, ySlow);
                         ctx.lineTo(x, yFast);
                         ctx.stroke();
                     } else {
-                        ctx.strokeStyle = "rgba(255, 140, 0, 0.45)"; // DarkOrange Ribbon
+                        ctx.strokeStyle = "rgba(255, 140, 0, 0.45)";
                         ctx.beginPath();
                         ctx.moveTo(x, ySlow);
                         ctx.lineTo(x, yMirror);
@@ -513,7 +488,7 @@
                 }
             }
 
-            // Menggambar Garis Rata-rata Bergerak Utama (MA Line)
+            // Garis Utama Moving Average
             ctx.lineWidth = 2;
 
             // Fast MA (Blue)
@@ -552,7 +527,7 @@
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // ---- GAMBAR LILIN UTAMA (Candlestick Drawing) ----
+            // ---- CANDLESTICKS ----
             for (let i = startIndex; i <= endIndex; i++) {
                 const localIdx = i - startIndex;
                 const xCenter = localIdx * barSpacing + barSpacing / 2;
@@ -588,7 +563,7 @@
                 }
             }
 
-            // Sumbu Label Harga Sebelah Kanan (Main Chart Axis)
+            // Sumbu Label Harga Sebelah Kanan
             ctx.fillStyle = "#8888aa";
             ctx.font = "10px sans-serif";
             ctx.textAlign = "left";
@@ -681,13 +656,7 @@
         }
 
         function getIntervalDisplayName(interval) {
-            switch (interval) {
-                case "30min": return "M30";
-                case "1h": return "H1";
-                case "4h": return "H4";
-                case "1day": return "D1";
-                default: return interval.toUpperCase();
-            }
+            return interval === "1h" ? "H1" : "H4";
         }
 
         // Event Handler
@@ -719,7 +688,7 @@
             document.getElementById("chart-title").innerText = `${currentSymbol} - ${getIntervalDisplayName(currentInterval)}`;
         }
 
-        // Inisialisasi Pertama Kali
+        // Jalankan Pertama Kali saat Halaman Dibuka
         updateHeaderTitle();
         resizeCanvas();
         fetchData();
