@@ -122,7 +122,7 @@
 
     <div class="terminal-container">
         <div class="chart-header">
-            <span id="chart-title">GBP/USD - M30</span>
+            <span id="chart-title">GBP/USD - H1</span>
             <span id="api-status" class="status-badge">Menghubungkan API...</span>
         </div>
         
@@ -131,12 +131,12 @@
         </div>
 
         <div class="controls-container">
-            <!-- Baris Tombol Timeframe -->
+            <!-- Baris Tombol Timeframe dengan H1 sebagai default di depan, M30 di belakang -->
             <div class="control-row">
-                <button class="btn active" onclick="changeTimeframe('30min', this)">M30</button>
-                <button class="btn" onclick="changeTimeframe('1h', this)">H1</button>
+                <button class="btn active" onclick="changeTimeframe('1h', this)">H1</button>
                 <button class="btn" onclick="changeTimeframe('4h', this)">H4</button>
                 <button class="btn" onclick="changeTimeframe('1day', this)">D1</button>
+                <button class="btn" onclick="changeTimeframe('30min', this)">M30</button>
                 <button class="btn btn-refresh" onclick="refreshData()">REFRES API</button>
             </div>
             <!-- Baris Tombol Pair Mata Uang -->
@@ -152,7 +152,7 @@
         // Konfigurasi API
         const API_KEY = "21402a93c8cc4e2aab076835d763d7cd";
         let currentSymbol = "GBP/USD";
-        let currentInterval = "30min";
+        let currentInterval = "1h"; // Set default ke H1 (1h) agar aktif pertama kali saat dimuat
         let rawData = [];
         let calculatedData = {};
         let isUsingMock = false;
@@ -213,7 +213,18 @@
             let basePrice = currentSymbol === "XAU/USD" ? 2300 : (currentSymbol === "GBP/USD" ? 1.27 : 1.09);
             const mockList = [];
             let currentTime = Date.now();
-            const step = currentInterval === "30min" ? 30 * 60 * 1000 : (currentInterval === "1h" ? 3600 * 1000 : 24 * 3600 * 1000);
+            
+            // Menentukan selisih waktu berdasarkan interval aktif saat ini
+            let step;
+            if (currentInterval === "30min") {
+                step = 30 * 60 * 1000;
+            } else if (currentInterval === "1h") {
+                step = 60 * 60 * 1000;
+            } else if (currentInterval === "4h") {
+                step = 4 * 60 * 60 * 1000;
+            } else { // 1day
+                step = 24 * 60 * 60 * 1000;
+            }
 
             for (let i = 0; i < 100; i++) {
                 let change = (Math.random() - 0.49) * (basePrice * 0.003);
@@ -290,7 +301,7 @@
 
             for (let i = 0; i < length; i++) {
                 if (i < stochPeriod - 1) {
-                    stochRaw.push(50.0); // Default flat jika data belum mencukupi
+                    stochRaw.push(50.0);
                 } else {
                     const subsetHigh = highs.slice(i - stochPeriod + 1, i + 1);
                     const subsetLow = lows.slice(i - stochPeriod + 1, i + 1);
@@ -335,7 +346,6 @@
                 return;
             }
 
-            // Pembagian Layar (Main Chart & Subwindow)
             const rightMargin = 60;
             const chartWidth = width - rightMargin;
 
@@ -347,7 +357,6 @@
             const subBottomY = height - 15;
             const subHeight = subBottomY - subTopY;
 
-            // Menentukan area lilin yang terlihat (ambil 65 lilin terakhir)
             const visibleBarsCount = 65;
             const startIndex = Math.max(0, rawData.length - visibleBarsCount);
             const endIndex = rawData.length - 1;
@@ -375,12 +384,10 @@
                 }
             }
 
-            // Margin vertikal skala harga
             const yPadding = (maxVal - minVal) * 0.08;
             maxVal += yPadding;
             minVal -= yPadding;
 
-            // Fungsi utilitas proyeksi kordinat Y
             function getMainY(price) {
                 return mainBottomY - ((price - minVal) / (maxVal - minVal)) * mainHeight;
             }
@@ -410,7 +417,7 @@
                 const lowPrice = parseFloat(rawData[i].low);
                 const yLow = getMainY(lowPrice);
 
-                ctx.fillStyle = "#191970"; // Warna Midnight Blue yang diminta menggantikan DeepPink
+                ctx.fillStyle = "#191970"; // Midnight Blue
                 ctx.fillRect(xStart + 1, yLow, barSpacing - 1, mainBottomY - yLow);
             }
 
@@ -431,15 +438,13 @@
                     ctx.lineWidth = Math.max(1, barSpacing - 2);
 
                     if (fast > slow) {
-                        // Saat Tren Naik (Fast MA di atas Slow MA) -> Gambar pita biru
-                        ctx.strokeStyle = "rgba(30, 144, 255, 0.45)"; // DodgerBlue semi-transparan
+                        ctx.strokeStyle = "rgba(30, 144, 255, 0.45)"; // DodgerBlue Ribbon
                         ctx.beginPath();
                         ctx.moveTo(x, ySlow);
                         ctx.lineTo(x, yFast);
                         ctx.stroke();
                     } else {
-                        // Saat Tren Turun (Fast MA di bawah Slow MA) -> Gambar pita cermin orange
-                        ctx.strokeStyle = "rgba(255, 140, 0, 0.45)"; // DarkOrange semi-transparan
+                        ctx.strokeStyle = "rgba(255, 140, 0, 0.45)"; // DarkOrange Ribbon
                         ctx.beginPath();
                         ctx.moveTo(x, ySlow);
                         ctx.lineTo(x, yMirror);
@@ -448,11 +453,11 @@
                 }
             }
 
-            // Menggambar Garis Garis Rata-rata Bergerak Utama (MA Line)
+            // Menggambar Garis Rata-rata Bergerak Utama (MA Line)
             ctx.lineWidth = 2;
 
             // Fast MA (Blue)
-            ctx.strokeStyle = "#1e90ff"; // DodgerBlue
+            ctx.strokeStyle = "#1e90ff";
             ctx.beginPath();
             for (let i = startIndex; i <= endIndex; i++) {
                 const localIdx = i - startIndex;
@@ -463,7 +468,7 @@
             ctx.stroke();
 
             // Mirror MA (Orange)
-            ctx.strokeStyle = "#ff8c00"; // DarkOrange
+            ctx.strokeStyle = "#ff8c00";
             ctx.beginPath();
             for (let i = startIndex; i <= endIndex; i++) {
                 const localIdx = i - startIndex;
@@ -503,24 +508,23 @@
 
                 const isBullish = close >= open;
 
-                // Lilin Hijau Sesuai Gambar UI (Gaya MT4 Hollow & Kontras Tinggi)
-                ctx.strokeStyle = "#00ff00"; // Green outline
+                ctx.strokeStyle = "#00ff00";
                 ctx.lineWidth = 1.2;
 
-                // Gambar bayangan atas-bawah (Wicks)
+                // Wicks
                 ctx.beginPath();
                 ctx.moveTo(xCenter, yHigh);
                 ctx.lineTo(xCenter, yLow);
                 ctx.stroke();
 
-                // Tubuh Lilin (Body)
+                // Body
                 const barWidth = Math.max(3, barSpacing * 0.7);
                 if (isBullish) {
-                    ctx.fillStyle = "#080826"; // Hollow (mengisi warna background)
+                    ctx.fillStyle = "#080826";
                     ctx.fillRect(xCenter - barWidth/2, Math.min(yOpen, yClose), barWidth, Math.abs(yOpen - yClose));
                     ctx.strokeRect(xCenter - barWidth/2, Math.min(yOpen, yClose), barWidth, Math.abs(yOpen - yClose));
                 } else {
-                    ctx.fillStyle = "#00ff00"; // Solid untuk lilin turun / bearish
+                    ctx.fillStyle = "#00ff00";
                     ctx.fillRect(xCenter - barWidth/2, Math.min(yOpen, yClose), barWidth, Math.abs(yOpen - yClose));
                     ctx.strokeRect(xCenter - barWidth/2, Math.min(yOpen, yClose), barWidth, Math.abs(yOpen - yClose));
                 }
@@ -536,8 +540,7 @@
                 ctx.fillText(p.toFixed(currentSymbol === "XAU/USD" ? 2 : 5), chartWidth + 5, getMainY(p) + 3);
             }
 
-            // ---- INDIKATOR 3 (EMA Subwindow 2-50 "EMA 1 Jenuh") ----
-            // Batas Pembatas antara Window Utama dan Subwindow
+            // ---- INDIKATOR 3 (EMA Subwindow 2-50) ----
             ctx.strokeStyle = "#333355";
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -545,9 +548,8 @@
             ctx.lineTo(width, subTopY - 10);
             ctx.stroke();
 
-            // Menggambar Tingkat Level (85, 50, 15) di Subwindow
             const levels = [85, 50, 15];
-            ctx.strokeStyle = "rgba(128, 128, 128, 0.5)"; // Level Dot clrGray
+            ctx.strokeStyle = "rgba(128, 128, 128, 0.5)";
             ctx.lineWidth = 1;
             ctx.setLineDash([3, 3]);
             levels.forEach(lvl => {
@@ -565,7 +567,7 @@
             ctx.setLineDash([]);
 
             // Plotting Garis EMA 1 (Biru, Cepat)
-            ctx.strokeStyle = "#0000ff"; // Blue Line
+            ctx.strokeStyle = "#0000ff";
             ctx.lineWidth = 2;
             ctx.beginPath();
             for (let i = startIndex; i <= endIndex; i++) {
@@ -577,7 +579,7 @@
             ctx.stroke();
 
             // Plotting Garis EMA 2 (Merah, Lambat)
-            ctx.strokeStyle = "#ff0000"; // Red Line
+            ctx.strokeStyle = "#ff0000";
             ctx.lineWidth = 2;
             ctx.beginPath();
             for (let i = startIndex; i <= endIndex; i++) {
@@ -595,10 +597,9 @@
                 const emaVal = calculatedData.emaSub1[i];
 
                 if (emaVal !== null) {
-                    // Panah ke ATAS saat EMA1 berada di zona OVERSOLD (<= 15)
                     if (emaVal <= 15) {
-                        const y = getSubY(emaVal) + 12; // Posisi di bawah garis
-                        ctx.fillStyle = "#00ff00"; // Lime Arrow
+                        const y = getSubY(emaVal) + 12;
+                        ctx.fillStyle = "#00ff00";
                         ctx.beginPath();
                         ctx.moveTo(x, y);
                         ctx.lineTo(x - 5, y + 8);
@@ -607,10 +608,9 @@
                         ctx.fill();
                     }
 
-                    // Panah ke BAWAH saat EMA1 berada di zona OVERBOUGHT (>= 85)
                     if (emaVal >= 85) {
-                        const y = getSubY(emaVal) - 12; // Posisi di atas garis
-                        ctx.fillStyle = "#ff0000"; // Red Arrow
+                        const y = getSubY(emaVal) - 12;
+                        ctx.fillStyle = "#ff0000";
                         ctx.beginPath();
                         ctx.moveTo(x, y);
                         ctx.lineTo(x - 5, y - 8);
@@ -619,6 +619,17 @@
                         ctx.fill();
                     }
                 }
+            }
+        }
+
+        // Pengonversi Kode Interval ke Label Tampilan UI
+        function getIntervalDisplayName(interval) {
+            switch (interval) {
+                case "30min": return "M30";
+                case "1h": return "H1";
+                case "4h": return "H4";
+                case "1day": return "D1";
+                default: return interval.toUpperCase();
             }
         }
 
@@ -642,17 +653,16 @@
         }
 
         function setActiveButton(clickedButton) {
-            // Ambil semua saudara tombol di baris yang sama dan hilangkan kelas active
             const siblings = clickedButton.parentElement.querySelectorAll(".btn");
             siblings.forEach(btn => btn.classList.remove("active"));
             clickedButton.classList.add("active");
         }
 
         function updateHeaderTitle() {
-            document.getElementById("chart-title").innerText = `${currentSymbol} - ${currentInterval.toUpperCase()}`;
+            document.getElementById("chart-title").innerText = `${currentSymbol} - ${getIntervalDisplayName(currentInterval)}`;
         }
 
-        // Inisialisasi Terminal Pertama Kali
+        // Inisialisasi Pertama Kali
         updateHeaderTitle();
         resizeCanvas();
         fetchData();
